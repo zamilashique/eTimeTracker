@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ETimeTracker</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        margin: 0;
+        min-height: 100vh;
+        overflow-y: auto;
+      }
+
+      .container {
+        background: white;
+        padding:20px;
+        margin: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px #aaa;
+        display: inline-block;
+        min-width: 350px;
+      }
+
+      h2 {
+        color: #2a4cb2;
+      }
+
+      input[type="datetime-local"] {
+        margin: 10px 0;
+        padding: 10px;
+        border: 2px solid #ccc;
+        border-radius: 6px;
+        font-size: 15px;
+        width: 92%;
+        transition: all 0.3s ease;
+      }
+
+      input[type="datetime-local"].active {
+        border-color: #2a4cb2;
+        background-color: #e6f0ff;
+        color: #2a4cb2;
+        font-weight: bold;
+      }
+
+      button {
+        margin: 10px 6px 10px 0;
+        padding: 10px 16px;
+        background-color: green;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .remove-btn {
+        background-color: red;
+      }
+
+      .section {
+        text-align: left;
+        margin-top: 15px;
+      }
+
+      .timer {
+        font-size: 1.4em;
+        color: #b22222;
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      #breakTimeContainer,
+      #breakDurationContainer,
+      #overtimeContainer {
+        margin-top: 10px;
+      }
+
+      .break-pair {
+        margin-bottom: 10px;
+        border-bottom: 1px dashed #ccc;
+        padding-bottom: 10px;
+      }
+
+      .auther {
+        font-size: 10px;
+        display: flex;
+        justify-content: end;
+      }
+      .auther-name{
+        font-size: 10px;
+        margin-left: 4px;
+        color: #243388;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>🕒 ETimeTracker</h2>
+
+      <div class="section">
+        <label><strong>Clock In:</strong></label>
+        <input class="section" type="datetime-local" id="clockIn" />
+      </div>
+
+      <div class="section">
+        <label><strong>Working Hours:</strong></label>
+        <input
+          type="number"
+          id="workHours"
+          min="1"
+          max="24"
+          step="0.1"
+          value="8.5"
+        />
+      </div>
+
+      <!-- Break Time Section -->
+      <div class="section" id="breakTimeContainer" style="display: none"></div>
+
+      <!-- Break Buttons -->
+      <button onclick="addBreak()">Add Break</button>
+      <button
+        class="remove-btn"
+        id="removeBreakBtn"
+        onclick="removeBreak()"
+        style="display: none"
+      >
+        Remove Last Break
+      </button>
+
+      <!-- Calculate Button -->
+      <button onclick="calculate()">Calculate</button>
+
+      <!-- Timer Display -->
+      <div class="timer">
+        ⏳ Remaining Time: <span id="remainingTime">--:--:--</span>
+      </div>
+
+      <!-- Break Duration Display -->
+      <div id="breakDurationContainer" class="section" style="display: none">
+        <p>
+          <strong>Break Duration: <span id="breakTime">-</span></strong>
+        </p>
+      </div>
+
+      <!-- End Time -->
+      <div class="section">
+        <p>
+          <strong>Required End Time: <span id="endTime">-</span></strong>
+        </p>
+      </div>
+
+      <!-- Overtime -->
+      <div id="overtimeContainer" class="section" style="display: none">
+        <p>
+          <strong>OverTime: <span id="overTime">-</span></strong>
+        </p>
+      </div>
+      <span class="auther">Developed by <span class="auther-name">A$hique</span></span>
+    </div>
+
+    <script>
+      let requiredEndTime = null;
+      let timerInterval = null;
+      const startTimeKey = "etimeTrackerStart";
+
+      function checkExpiration() {
+        const now = new Date().getTime();
+        const saved = localStorage.getItem(startTimeKey);
+
+        if (!saved) {
+          localStorage.setItem(startTimeKey, now);
+        } else if (now - parseInt(saved) > 24 * 60 * 60 * 1000) {
+          // Expired: Clear all inputs and reset
+          localStorage.removeItem(startTimeKey);
+          location.reload(); // refreshes the page
+        }
+        document.addEventListener("DOMContentLoaded", () => {
+          const clockInInput = document.getElementById("clockIn");
+
+          clockInInput.addEventListener("change", function () {
+            this.classList.add("active");
+          });
+
+          // Optional: style it on page load if a value already exists
+          if (clockInInput.value) {
+            clockInInput.classList.add("active");
+          }
+        });
+      }
+
+      checkExpiration();
+
+      function addBreak() {
+        const container = document.getElementById("breakTimeContainer");
+        container.style.display = "block";
+
+        const breakDiv = document.createElement("div");
+        breakDiv.className = "break-pair";
+
+        const startLabel = document.createElement("label");
+        startLabel.innerHTML = "<strong>Break Start:</strong>";
+        const startInput = document.createElement("input");
+        startInput.type = "datetime-local";
+        startInput.classList.add("breakStart");
+
+        const endLabel = document.createElement("label");
+        endLabel.innerHTML = "<strong>Break End:</strong>";
+        const endInput = document.createElement("input");
+        endInput.type = "datetime-local";
+        endInput.classList.add("breakEnd");
+
+        breakDiv.appendChild(startLabel);
+        breakDiv.appendChild(startInput);
+        breakDiv.appendChild(document.createElement("br"));
+        breakDiv.appendChild(endLabel);
+        breakDiv.appendChild(endInput);
+
+        container.appendChild(breakDiv);
+
+        // Show remove button if more than 0 breaks
+        document.getElementById("removeBreakBtn").style.display =
+          "inline-block";
+
+        document
+          .getElementById("clockIn")
+          .addEventListener("change", () => input.classList.add("active"));
+
+        // Add focus effect
+        [startInput, endInput].forEach((input) => {
+          input.addEventListener("change", () => input.classList.add("active"));
+        });
+      }
+
+      function removeBreak() {
+        const container = document.getElementById("breakTimeContainer");
+        const breaks = container.getElementsByClassName("break-pair");
+
+        if (breaks.length > 0) {
+          const lastBreak = breaks[breaks.length - 1];
+          container.removeChild(lastBreak);
+        }
+
+        const remainingBreaks =
+          container.getElementsByClassName("break-pair").length;
+
+        if (remainingBreaks === 0) {
+          container.style.display = "none";
+          document.getElementById("removeBreakBtn").style.display = "none";
+        }
+      }
+      function calculate() {
+        const inTime = new Date(document.getElementById("clockIn").value);
+        if (!inTime || isNaN(inTime)) {
+          alert("Please enter a valid Clock In time.");
+          return;
+        }
+
+        let totalBreakMs = 0;
+
+        const breakStarts = document.querySelectorAll(".breakStart");
+        const breakEnds = document.querySelectorAll(".breakEnd");
+
+        for (let i = 0; i < breakStarts.length; i++) {
+          const start = new Date(breakStarts[i].value);
+          const end = new Date(breakEnds[i].value);
+          if (!isNaN(start) && !isNaN(end) && end > start) {
+            totalBreakMs += end - start;
+          }
+        }
+
+        const breakDurationElem = document.getElementById(
+          "breakDurationContainer"
+        );
+        if (totalBreakMs > 0) {
+          breakDurationElem.style.display = "block";
+          document.getElementById("breakTime").textContent =
+            formatDuration(totalBreakMs);
+        } else {
+          breakDurationElem.style.display = "none";
+        }
+
+        const workHours =
+          parseFloat(document.getElementById("workHours").value) || 0;
+        const officeTimeMs = workHours * 60 * 60 * 1000;
+
+        requiredEndTime = new Date(
+          inTime.getTime() + officeTimeMs + totalBreakMs
+        );
+        document.getElementById("endTime").textContent =
+          requiredEndTime.toLocaleTimeString();
+
+        clearInterval(timerInterval);
+        timerInterval = setInterval(updateCountdown, 1000);
+        updateCountdown();
+      }
+
+      function updateCountdown() {
+        if (!requiredEndTime) return;
+
+        const now = new Date();
+        const diff = requiredEndTime - now;
+
+        const remainingElem = document.getElementById("remainingTime");
+        const overElem = document.getElementById("overTime");
+        const overtimeContainer = document.getElementById("overtimeContainer");
+
+        if (diff <= 0) {
+          remainingElem.textContent = "✅ Your Time Up! Please go Home.";
+          remainingElem.style.color = "green";
+
+          // Show overtime section
+          overtimeContainer.style.display = "block";
+          const overtimeMs = now - requiredEndTime;
+          overElem.textContent = formatDuration(overtimeMs);
+          overElem.style.color = "green";
+          return;
+        }
+
+        // Hide overtime if still within work time
+        overtimeContainer.style.display = "none";
+
+        remainingElem.textContent = formatDuration(diff);
+
+        if (diff < 5 * 60 * 1000) {
+          remainingElem.style.color = "red";
+        } else if (diff < 30 * 60 * 1000) {
+          remainingElem.style.color = "orange";
+        } else {
+          remainingElem.style.color = "#b22222";
+        }
+      }
+
+      function formatDuration(ms) {
+        const totalSec = Math.floor(ms / 1000);
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+        return `${hrs.toString().padStart(2, "0")}:${mins
+          .toString()
+          .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      }
+
+      const bgImages = [
+        "https://picsum.photos/id/1032/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1045/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1033/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1031/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1068/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1015/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1016/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1018/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1020/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+        "https://picsum.photos/id/1024/1600/900",
+        "https://picsum.photos/id/1027/1600/900",
+      ];
+
+      function updateBackground() {
+        const minute = new Date().getMinutes();
+        const imageUrl = bgImages[minute % bgImages.length];
+        document.body.style.backgroundImage = `url('${imageUrl}')`;
+      }
+
+      updateBackground();
+      setInterval(updateBackground, 1000);
+    </script>
+  </body>
+</html>
