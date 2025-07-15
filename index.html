@@ -4,42 +4,49 @@
     <meta charset="UTF-8" />
     <title>ETimeTracker</title>
     <style>
+      /* Background styling */
       body {
         font-family: Arial, sans-serif;
-        background-size: cover;
-        background-position: center;
+        background-image: url("https://cdn.wallpapersafari.com/60/60/ImIF0v.jpg");
         background-repeat: no-repeat;
         background-attachment: fixed;
+        background-size: cover;
         margin: 0;
         min-height: 100vh;
         overflow-y: auto;
       }
 
+      /* Container styling */
       .container {
-        background: white;
-        padding:20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 20px;
         margin: 20px;
         border-radius: 10px;
         box-shadow: 0 0 10px #aaa;
-        display: inline-block;
-        min-width: 350px;
+        max-width: 350px;
       }
 
       h2 {
         color: #2a4cb2;
+        margin-bottom: 20px;
+        text-align: center;
       }
 
-      input[type="datetime-local"] {
-        margin: 10px 0;
-        padding: 10px;
+      label {
+        font-weight: bold;
+      }
+
+      select {
+        padding: 6px 10px;
+        margin: 5px 5px 10px 0;
         border: 2px solid #ccc;
         border-radius: 6px;
         font-size: 15px;
-        width: 92%;
+        cursor: pointer;
         transition: all 0.3s ease;
+        min-width: auto;
       }
-
-      input[type="datetime-local"].active {
+      select.active {
         border-color: #2a4cb2;
         background-color: #e6f0ff;
         color: #2a4cb2;
@@ -47,7 +54,7 @@
       }
 
       button {
-        margin: 10px 6px 10px 0;
+        margin: 1px;
         padding: 10px 16px;
         background-color: green;
         color: white;
@@ -55,14 +62,12 @@
         border-radius: 5px;
         cursor: pointer;
       }
-
-      .remove-btn {
+      button.remove-btn {
         background-color: red;
       }
 
       .section {
         text-align: left;
-        margin-top: 15px;
       }
 
       .timer {
@@ -72,24 +77,35 @@
         margin-top: 10px;
       }
 
-      #breakTimeContainer,
-      #breakDurationContainer,
-      #overtimeContainer {
-        margin-top: 10px;
-      }
-
       .break-pair {
         margin-bottom: 10px;
         border-bottom: 1px dashed #ccc;
         padding-bottom: 10px;
       }
 
+      .time-dropdowns > select {
+        width: fit-content;
+      }
+
+      .time-dropdowns {
+        margin-bottom: 10px;
+      }
+
+      .time-label {
+        display: inline-block;
+        min-width: 90px;
+      }
+
+      .toggle-format {
+        margin: 10px 0;
+      }
+
       .auther {
         font-size: 10px;
         display: flex;
-        justify-content: end;
+        justify-content: flex-end;
       }
-      .auther-name{
+      .auther-name {
         font-size: 10px;
         margin-left: 4px;
         color: #243388;
@@ -100,39 +116,42 @@
     <div class="container">
       <h2>🕒 ETimeTracker</h2>
 
-      <div class="section">
-        <label><strong>Clock In:</strong></label>
-        <input class="section" type="datetime-local" id="clockIn" />
+      <div class="section toggle-format" style="text-align: end">
+        <label
+          ><input type="checkbox" id="toggleFormat" /> Use 24-hour format</label
+        >
       </div>
 
       <div class="section">
-        <label><strong>Working Hours:</strong></label>
-        <input
-          type="number"
-          id="workHours"
-          min="1"
-          max="24"
-          step="0.1"
-          value="8.5"
-        />
+        <label class="time-label" for="clockIn_hour"
+          ><strong>Clock In:</strong></label
+        >
+        <span class="time-dropdowns" id="clockInSelectors"></span>
+      </div>
+
+      <div class="section">
+        <label class="time-label" for="workHours_hour"
+          ><strong>Working Hours:</strong></label
+        >
+        <span class="time-dropdowns" id="workHoursSelectors"></span>
       </div>
 
       <!-- Break Time Section -->
       <div class="section" id="breakTimeContainer" style="display: none"></div>
 
-      <!-- Break Buttons -->
-      <button onclick="addBreak()">Add Break</button>
-      <button
-        class="remove-btn"
-        id="removeBreakBtn"
-        onclick="removeBreak()"
-        style="display: none"
-      >
-        Remove Last Break
-      </button>
-
+      <div class="section buttons-inline">
+        <button onclick="addBreak()">Add Break</button>
+        <button
+          class="remove-btn"
+          id="removeBreakBtn"
+          onclick="removeBreak()"
+          style="display: none"
+        >
+          Remove Last Break
+        </button>
+        <button onclick="calculate()">Calculate</button>
+      </div>
       <!-- Calculate Button -->
-      <button onclick="calculate()">Calculate</button>
 
       <!-- Timer Display -->
       <div class="timer">
@@ -159,212 +178,467 @@
           <strong>OverTime: <span id="overTime">-</span></strong>
         </p>
       </div>
-      <span class="auther">Developed by <span class="auther-name">A$hique</span></span>
+
+      <span class="auther"
+        >Developed by <span class="auther-name">A$hique</span></span
+      >
     </div>
 
     <script>
-      let requiredEndTime = null;
-      let timerInterval = null;
-      const startTimeKey = "etimeTrackerStart";
+      const toggleFormatCheckbox = document.getElementById("toggleFormat");
+      let use24Hour = false;
 
-      function checkExpiration() {
-        const now = new Date().getTime();
-        const saved = localStorage.getItem(startTimeKey);
-
-        if (!saved) {
-          localStorage.setItem(startTimeKey, now);
-        } else if (now - parseInt(saved) > 24 * 60 * 60 * 1000) {
-          // Expired: Clear all inputs and reset
-          localStorage.removeItem(startTimeKey);
-          location.reload(); // refreshes the page
-        }
-        document.addEventListener("DOMContentLoaded", () => {
-          const clockInInput = document.getElementById("clockIn");
-
-          clockInInput.addEventListener("change", function () {
-            this.classList.add("active");
-          });
-
-          // Optional: style it on page load if a value already exists
-          if (clockInInput.value) {
-            clockInInput.classList.add("active");
-          }
+      // Helper to create select element with options
+      function createSelect(id, options, defaultValue) {
+        const select = document.createElement("select");
+        select.id = id;
+        options.forEach((opt) => {
+          const option = document.createElement("option");
+          option.value = opt.value;
+          option.textContent = opt.label;
+          if (opt.value === defaultValue) option.selected = true;
+          select.appendChild(option);
         });
+        select.addEventListener("change", () => select.classList.add("active"));
+        return select;
       }
 
-      checkExpiration();
+      // Build hour options for 12h and 24h formats
+      function getHourOptions() {
+        if (use24Hour) {
+          // 0 to 23
+          return Array.from({ length: 24 }, (_, i) => ({
+            value: i,
+            label: i.toString().padStart(2, "0"),
+          }));
+        } else {
+          // 1 to 12
+          return Array.from({ length: 12 }, (_, i) => ({
+            value: i + 1,
+            label: (i + 1).toString().padStart(2, "0"),
+          }));
+        }
+      }
+
+      // Minute options 0 to 59
+      function getMinuteOptions() {
+        return Array.from({ length: 60 }, (_, i) => ({
+          value: i,
+          label: i.toString().padStart(2, "0"),
+        }));
+      }
+
+      // AM/PM options
+      const ampmOptions = [
+        { value: "AM", label: "AM" },
+        { value: "PM", label: "PM" },
+      ];
+
+      // Create time selectors container for a given prefix (e.g. "clockIn", "break0Start", etc)
+      // defaultHour and defaultMinute are numbers, defaultAMPM is 'AM' or 'PM' or null for 24h
+      function createTimeSelectors(
+        prefix,
+        defaultHour = 8,
+        defaultMinute = 30,
+        defaultAMPM = "AM"
+      ) {
+        const container = document.createElement("span");
+        container.className = "time-dropdowns";
+
+        const hourSelect = createSelect(
+          prefix + "_hour",
+          getHourOptions(),
+          defaultHour
+        );
+        const minuteSelect = createSelect(
+          prefix + "_minute",
+          getMinuteOptions(),
+          defaultMinute
+        );
+
+        container.appendChild(hourSelect);
+        container.appendChild(minuteSelect);
+
+        if (!use24Hour) {
+          const ampmSelect = createSelect(
+            prefix + "_ampm",
+            ampmOptions,
+            defaultAMPM
+          );
+          container.appendChild(ampmSelect);
+        }
+
+        return container;
+      }
+
+      // Read time from selectors and return a Date object with today's date and selected time
+      function readTimeFromSelectors(prefix) {
+        const hourSel = document.getElementById(prefix + "_hour");
+        const minuteSel = document.getElementById(prefix + "_minute");
+        const ampmSel = document.getElementById(prefix + "_ampm");
+
+        if (!hourSel || !minuteSel) return null;
+
+        let hour = parseInt(hourSel.value);
+        const minute = parseInt(minuteSel.value);
+
+        if (!use24Hour) {
+          const ampm = ampmSel ? ampmSel.value : "AM";
+          if (ampm === "PM" && hour !== 12) hour += 12;
+          if (ampm === "AM" && hour === 12) hour = 0;
+        }
+
+        const now = new Date();
+        const dt = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          hour,
+          minute,
+          0,
+          0
+        );
+        return dt;
+      }
+
+      // Read working hours from selectors, return as decimal hours (e.g., 8.5)
+      function readWorkingHours() {
+        const hoursSel = document.getElementById("workHours_hour");
+        const minsSel = document.getElementById("workHours_minute");
+        if (!hoursSel || !minsSel) return 0;
+
+        return parseInt(hoursSel.value) + parseInt(minsSel.value) / 60;
+      }
+
+      // Add active class to selects on change
+      function addActiveListeners(container) {
+        const selects = container.querySelectorAll("select");
+        selects.forEach((sel) =>
+          sel.addEventListener("change", () => sel.classList.add("active"))
+        );
+      }
+
+      // Initialize selectors for Clock In and Working Hours
+      const clockInContainer = document.getElementById("clockInSelectors");
+      const workHoursContainer = document.getElementById("workHoursSelectors");
+
+      function initSelectors() {
+        clockInContainer.innerHTML = "";
+        workHoursContainer.innerHTML = "";
+
+        // Clock In default 8:30 AM
+        const clockInTime = createTimeSelectors("clockIn", 8, 30, "AM");
+        clockInContainer.appendChild(clockInTime);
+
+        // Working hours default 8h 30m
+        const workHoursTime = document.createElement("span");
+        workHoursTime.className = "time-dropdowns";
+
+        // Hours dropdown for working hours from 0 to 24
+        const hoursOptions = Array.from({ length: 25 }, (_, i) => ({
+          value: i,
+          label: i.toString(),
+        }));
+        const workHourSelect = createSelect("workHours_hour", hoursOptions, 8);
+
+        // Minutes dropdown for working minutes: 0, 15, 30, 45 only
+        const workMinuteOptions = [0, 15, 30, 45].map((m) => ({
+          value: m,
+          label: m.toString().padStart(2, "0"),
+        }));
+        const workMinuteSelect = createSelect(
+          "workHours_minute",
+          workMinuteOptions,
+          30
+        );
+
+        workHoursTime.appendChild(workHourSelect);
+        workHoursTime.appendChild(workMinuteSelect);
+
+        workHoursContainer.appendChild(workHoursTime);
+
+        addActiveListeners(clockInContainer);
+        addActiveListeners(workHoursContainer);
+      }
+
+      // Break management
+      const breakTimeContainer = document.getElementById("breakTimeContainer");
+      const removeBreakBtn = document.getElementById("removeBreakBtn");
+      let breakCount = 0;
 
       function addBreak() {
-        const container = document.getElementById("breakTimeContainer");
-        container.style.display = "block";
+        breakCount++;
+        breakTimeContainer.style.display = "block";
 
         const breakDiv = document.createElement("div");
         breakDiv.className = "break-pair";
+        breakDiv.id = "break-" + breakCount;
 
+        // Break Start
         const startLabel = document.createElement("label");
-        startLabel.innerHTML = "<strong>Break Start:</strong>";
-        const startInput = document.createElement("input");
-        startInput.type = "datetime-local";
-        startInput.classList.add("breakStart");
+        startLabel.className = "time-label";
+        startLabel.textContent = "Break Start: ";
+        const startSelectors = createTimeSelectors(
+          `break${breakCount}Start`,
+          12,
+          0,
+          "AM"
+        );
 
+        // Break End
         const endLabel = document.createElement("label");
-        endLabel.innerHTML = "<strong>Break End:</strong>";
-        const endInput = document.createElement("input");
-        endInput.type = "datetime-local";
-        endInput.classList.add("breakEnd");
+        endLabel.className = "time-label";
+        endLabel.textContent = "Break End: ";
+        const endSelectors = createTimeSelectors(
+          `break${breakCount}End`,
+          12,
+          15,
+          "AM"
+        );
 
         breakDiv.appendChild(startLabel);
-        breakDiv.appendChild(startInput);
+        breakDiv.appendChild(startSelectors);
         breakDiv.appendChild(document.createElement("br"));
         breakDiv.appendChild(endLabel);
-        breakDiv.appendChild(endInput);
+        breakDiv.appendChild(endSelectors);
 
-        container.appendChild(breakDiv);
+        breakTimeContainer.appendChild(breakDiv);
 
-        // Show remove button if more than 0 breaks
-        document.getElementById("removeBreakBtn").style.display =
-          "inline-block";
+        removeBreakBtn.style.display = breakCount > 0 ? "inline-block" : "none";
 
-        document
-          .getElementById("clockIn")
-          .addEventListener("change", () => input.classList.add("active"));
-
-        // Add focus effect
-        [startInput, endInput].forEach((input) => {
-          input.addEventListener("change", () => input.classList.add("active"));
-        });
+        addActiveListeners(breakDiv);
       }
 
       function removeBreak() {
-        const container = document.getElementById("breakTimeContainer");
-        const breaks = container.getElementsByClassName("break-pair");
-
-        if (breaks.length > 0) {
-          const lastBreak = breaks[breaks.length - 1];
-          container.removeChild(lastBreak);
+        if (breakCount > 0) {
+          const lastBreak = document.getElementById("break-" + breakCount);
+          if (lastBreak) breakTimeContainer.removeChild(lastBreak);
+          breakCount--;
         }
-
-        const remainingBreaks =
-          container.getElementsByClassName("break-pair").length;
-
-        if (remainingBreaks === 0) {
-          container.style.display = "none";
-          document.getElementById("removeBreakBtn").style.display = "none";
-        }
+        if (breakCount === 0) breakTimeContainer.style.display = "none";
+        removeBreakBtn.style.display = breakCount > 0 ? "inline-block" : "none";
       }
+
+      // Calculation and Timer
+      let timerInterval = null;
+      let requiredEndTime = null;
+
       function calculate() {
-        const inTime = new Date(document.getElementById("clockIn").value);
-        if (!inTime || isNaN(inTime)) {
-          alert("Please enter a valid Clock In time.");
+        const clockInTime = readTimeFromSelectors("clockIn");
+        if (!clockInTime) {
+          alert("Please select valid Clock In time.");
           return;
         }
 
+        // Calculate total break duration in milliseconds
         let totalBreakMs = 0;
+        for (let i = 1; i <= breakCount; i++) {
+          const breakStart = readTimeFromSelectors(`break${i}Start`);
+          const breakEnd = readTimeFromSelectors(`break${i}End`);
 
-        const breakStarts = document.querySelectorAll(".breakStart");
-        const breakEnds = document.querySelectorAll(".breakEnd");
-
-        for (let i = 0; i < breakStarts.length; i++) {
-          const start = new Date(breakStarts[i].value);
-          const end = new Date(breakEnds[i].value);
-          if (!isNaN(start) && !isNaN(end) && end > start) {
-            totalBreakMs += end - start;
+          if (!breakStart || !breakEnd) {
+            alert(`Please select valid times for break ${i}.`);
+            return;
           }
+          if (breakEnd <= breakStart) {
+            alert(`Break End must be after Break Start for break ${i}.`);
+            return;
+          }
+
+          totalBreakMs += breakEnd - breakStart;
         }
 
+        // Display break duration
         const breakDurationElem = document.getElementById(
           "breakDurationContainer"
         );
+        const breakTimeSpan = document.getElementById("breakTime");
+
         if (totalBreakMs > 0) {
           breakDurationElem.style.display = "block";
-          document.getElementById("breakTime").textContent =
-            formatDuration(totalBreakMs);
+          const totalBreakMin = Math.floor(totalBreakMs / 60000);
+          const bh = Math.floor(totalBreakMin / 60);
+          const bm = totalBreakMin % 60;
+          breakTimeSpan.textContent = `${bh}h ${bm}m`;
         } else {
           breakDurationElem.style.display = "none";
+          breakTimeSpan.textContent = "-";
         }
 
-        const workHours =
-          parseFloat(document.getElementById("workHours").value) || 0;
-        const officeTimeMs = workHours * 60 * 60 * 1000;
-
-        requiredEndTime = new Date(
-          inTime.getTime() + officeTimeMs + totalBreakMs
-        );
-        document.getElementById("endTime").textContent =
-          requiredEndTime.toLocaleTimeString();
-
-        clearInterval(timerInterval);
-        timerInterval = setInterval(updateCountdown, 1000);
-        updateCountdown();
-      }
-
-      function updateCountdown() {
-        if (!requiredEndTime) return;
-
-        const now = new Date();
-        const diff = requiredEndTime - now;
-
-        const remainingElem = document.getElementById("remainingTime");
-        const overElem = document.getElementById("overTime");
-        const overtimeContainer = document.getElementById("overtimeContainer");
-
-        if (diff <= 0) {
-          remainingElem.textContent = "✅ Your Time Up! Please go Home.";
-          remainingElem.style.color = "green";
-
-          // Show overtime section
-          overtimeContainer.style.display = "block";
-          const overtimeMs = now - requiredEndTime;
-          overElem.textContent = formatDuration(overtimeMs);
-          overElem.style.color = "green";
+        const workingHours = readWorkingHours();
+        if (workingHours <= 0) {
+          alert("Working hours must be greater than 0.");
           return;
         }
 
-        // Hide overtime if still within work time
-        overtimeContainer.style.display = "none";
+        // Calculate required end time: clockIn + working hours + break duration
+        requiredEndTime = new Date(
+          clockInTime.getTime() + workingHours * 3600000 + totalBreakMs
+        );
 
-        remainingElem.textContent = formatDuration(diff);
+        // Display required end time as HH:MM format respecting 12/24h
+        document.getElementById("endTime").textContent =
+          formatTime(requiredEndTime);
 
-        if (diff < 5 * 60 * 1000) {
-          remainingElem.style.color = "red";
-        } else if (diff < 30 * 60 * 1000) {
-          remainingElem.style.color = "orange";
+        // Clear overtime and remaining time
+        document.getElementById("overtimeContainer").style.display = "none";
+        document.getElementById("overTime").textContent = "-";
+
+        // Start timer to update remaining time
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateRemainingTime, 1000);
+        updateRemainingTime();
+      }
+
+      // Format Date object as HH:MM (with AM/PM if needed)
+      function formatTime(date) {
+        let h = date.getHours();
+        let m = date.getMinutes();
+        if (use24Hour) {
+          return `${h.toString().padStart(2, "0")}:${m
+            .toString()
+            .padStart(2, "0")}`;
         } else {
-          remainingElem.style.color = "#b22222";
+          const ampm = h >= 12 ? "PM" : "AM";
+          h = h % 12;
+          if (h === 0) h = 12;
+          return `${h.toString().padStart(2, "0")}:${m
+            .toString()
+            .padStart(2, "0")} ${ampm}`;
         }
       }
 
-      function formatDuration(ms) {
-        const totalSec = Math.floor(ms / 1000);
-        const hrs = Math.floor(totalSec / 3600);
-        const mins = Math.floor((totalSec % 3600) / 60);
-        const secs = totalSec % 60;
-        return `${hrs.toString().padStart(2, "0")}:${mins
-          .toString()
-          .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      let alertShown = false;
+
+      // Update remaining time display
+      function updateRemainingTime() {
+        if (!requiredEndTime) return;
+        const now = new Date();
+        let diff = requiredEndTime - now;
+
+        const overTimeContainer = document.getElementById("overtimeContainer");
+        const overTimeSpan = document.getElementById("overTime");
+        const remainingTimeSpan = document.getElementById("remainingTime");
+
+        if (diff < 0) {
+          if (!alertShown) {
+            alertShown = true;
+            window.alert("⏰ Time up! Please go Home.");
+          }
+          // Overtime!
+          diff = -diff;
+          overTimeContainer.style.display = "block";
+
+          let seconds = Math.floor(diff / 1000);
+          const hours = Math.floor(seconds / 3600);
+          seconds %= 3600;
+          const minutes = Math.floor(seconds / 60);
+          seconds %= 60;
+
+          overTimeSpan.textContent = `${hours}h ${minutes}m ${seconds}s`;
+          remainingTimeSpan.textContent = "Times Up, Please go Home...!";
+          remainingTimeSpan.style.color = "green";
+        } else {
+          overTimeContainer.style.display = "none";
+          overTimeSpan.textContent = "-";
+
+          let seconds = Math.floor(diff / 1000);
+          const hours = Math.floor(seconds / 3600);
+          seconds %= 3600;
+          const minutes = Math.floor(seconds / 60);
+          seconds %= 60;
+
+          remainingTimeSpan.textContent =
+            `${hours.toString().padStart(2, "0")}:` +
+            `${minutes.toString().padStart(2, "0")}:` +
+            `${seconds.toString().padStart(2, "0")}`;
+        }
       }
+
+      // When 12h/24h format changes, rebuild selectors and recalc
+      toggleFormatCheckbox.addEventListener("change", () => {
+        use24Hour = toggleFormatCheckbox.checked;
+        initSelectors();
+
+        // Rebuild all break selectors with new format preserving times if possible
+        if (breakCount > 0) {
+          // Save existing breaks times
+          const oldBreakTimes = [];
+          for (let i = 1; i <= breakCount; i++) {
+            const start = readTimeFromSelectors(`break${i}Start`);
+            const end = readTimeFromSelectors(`break${i}End`);
+            oldBreakTimes.push({ start, end });
+          }
+
+          breakTimeContainer.innerHTML = "";
+          for (let i = 0; i < breakCount; i++) {
+            const bnum = i + 1;
+            const breakDiv = document.createElement("div");
+            breakDiv.className = "break-pair";
+            breakDiv.id = "break-" + bnum;
+
+            // Convert old times to new hour/min/ampm for selectors
+            function timeToComponents(date) {
+              let hour = date.getHours();
+              const minute = date.getMinutes();
+              let ampm = null;
+              if (!use24Hour) {
+                ampm = hour >= 12 ? "PM" : "AM";
+                hour = hour % 12;
+                if (hour === 0) hour = 12;
+              }
+              return { hour, minute, ampm };
+            }
+
+            const startComp = timeToComponents(oldBreakTimes[i].start);
+            const endComp = timeToComponents(oldBreakTimes[i].end);
+
+            const startLabel = document.createElement("label");
+            startLabel.className = "time-label";
+            startLabel.textContent = "Break Start: ";
+            const startSelectors = createTimeSelectors(
+              `break${bnum}Start`,
+              startComp.hour,
+              startComp.minute,
+              startComp.ampm
+            );
+
+            const endLabel = document.createElement("label");
+            endLabel.className = "time-label";
+            endLabel.textContent = "Break End: ";
+            const endSelectors = createTimeSelectors(
+              `break${bnum}End`,
+              endComp.hour,
+              endComp.minute,
+              endComp.ampm
+            );
+
+            breakDiv.appendChild(startLabel);
+            breakDiv.appendChild(startSelectors);
+            breakDiv.appendChild(document.createElement("br"));
+            breakDiv.appendChild(endLabel);
+            breakDiv.appendChild(endSelectors);
+
+            breakTimeContainer.appendChild(breakDiv);
+            addActiveListeners(breakDiv);
+          }
+        }
+
+        // Recalculate times after format change
+        calculate();
+      });
 
       const bgImages = [
         "https://picsum.photos/id/1032/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1045/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1033/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1031/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1068/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1015/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1016/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1018/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1020/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
         "https://picsum.photos/id/1024/1600/900",
-        "https://picsum.photos/id/1027/1600/900",
       ];
 
       function updateBackground() {
@@ -375,6 +649,9 @@
 
       updateBackground();
       setInterval(updateBackground, 1000);
+
+      // Initialize selectors on page load
+      initSelectors();
     </script>
   </body>
 </html>
